@@ -90,8 +90,9 @@
     .tab-content.active { display: block; }
 
     .input-box { width: 100%; padding: 8px; border: 3px solid #000; background: #fff; font-size: 13px; margin-bottom: 8px; border-radius: 4px; }
-    .checkbox-group { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-    .pixel-checkbox { background: #fff; border: 2px solid #000; padding: 6px 8px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+    .checkbox-group { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; max-height: 140px; overflow-y: auto; padding: 4px; border: 2px dashed #1B4D3E; border-radius: 6px; background: #f4fbf7; }
+    .pixel-checkbox { background: #fff; border: 2px solid #000; padding: 5px 7px; border-radius: 6px; font-size: 11px; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+    .pixel-checkbox:hover { background: #e0f2fe; }
     .custom-tag-group { display: flex; gap: 6px; margin-bottom: 10px; }
     .btn-add-tag { background: var(--bg-green); color: #fff; border: 2px solid #000; padding: 0 10px; font-size: 12px; cursor: pointer; border-radius: 4px; }
 
@@ -103,7 +104,7 @@
     .btn-action { color: #fff; border: 2px solid #000; padding: 4px 6px; border-radius: 4px; font-size: 10px; cursor: pointer; font-weight: bold; margin-left: 2px; }
     .btn-edit { background: #4A90E2; }
     .btn-delete { background: #ff4d4d; }
-    .tag { display: inline-block; background: #E0F2FE; border: 1px solid #000; padding: 1px 4px; border-radius: 3px; font-size: 10px; margin-right: 3px; }
+    .tag { display: inline-block; background: #E0F2FE; border: 1px solid #000; padding: 1px 4px; border-radius: 3px; font-size: 10px; margin-right: 3px; margin-top: 2px; }
     .star-rating { color: #FFB300; font-size: 12px; font-weight: bold; }
     
     .btn-search-detail {
@@ -198,14 +199,30 @@
           </select>
         </div>
 
+        <label style="font-size:11px; font-weight:bold; margin-bottom:4px; display:block;">♿ 편의시설 정보 선택:</label>
         <div class="checkbox-group" id="checkboxGroup">
-          <label class="pixel-checkbox"><input type="checkbox" value="♿ 경사로"> ♿ 경사로</label>
-          <label class="pixel-checkbox"><input type="checkbox" value="🛗 엘리베이터"> 🛗 엘리베이터</label>
-          <label class="pixel-checkbox"><input type="checkbox" value="⠃ 점자블록"> ⠃ 점자블록</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="♿ 장애인 화장실"> ♿ 장애인 화장실</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="🅿️ 장애인 주차시설"> 🅿️ 장애인 주차시설</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="🔊 음성 안내"> 🔊 음성 안내</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="🚪 자동문"> 🚪 자동문</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="📐 단차없는 바닥"> 📐 단차없는 바닥</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="🪜 난간 설치"> 🪜 난간 설치</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="🛗 휠체어 리프트"> 🛗 휠체어 리프트</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="↔️ 여유로운 통로 폭"> ↔️ 여유로운 통로 폭</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="🤟 수어 영상"> 🤟 수어 영상</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="💬 자막"> 💬 자막</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="🖼️ 픽토그램"> 🖼️ 픽토그램</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="🪑 높낮이 조절 책상"> 🪑 높낮이 조절 책상</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="🚕 장애인 택시 호출 여부"> 🚕 장애인 택시 호출 여부</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="💻 점자 정보 단말기"> 💻 점자 정보 단말기</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="⚡ 전동 휠체어 충전소"> ⚡ 전동 휠체어 충전소</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="🎨 색각 이상자 디자인"> 🎨 색각 이상자 디자인</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="🔤 시인성 높은 폰트"> 🔤 시인성 높은 폰트</label>
+          <label class="pixel-checkbox"><input type="checkbox" value="🦶 미끄럼 방지 시트"> 🦶 미끄럼 방지 시트</label>
         </div>
 
         <div class="custom-tag-group">
-          <input type="text" id="customTagInput" class="input-box" placeholder="추가 조건 입력" style="margin-bottom:0;">
+          <input type="text" id="customTagInput" class="input-box" placeholder="직접 조건 입력" style="margin-bottom:0;">
           <button class="btn-add-tag" onclick="addCustomCondition()">+ 추가</button>
         </div>
 
@@ -268,9 +285,10 @@
   <script>
     const ADMIN_PW = "0824";
     const SUPABASE_URL = 'https://rshmbesowbnvevmipgxj.supabase.co';
+    
+    // 🔴 아래 큰따옴표 안을 본인의 진짜 anon key (eyJhbGci...)로 꼭 바꿔주세요!
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJzaG1iZXNvd2JudmV2bWlwZ3hqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4MzExMzYsImV4cCI6MjEwMzQwNzEzNn0.ib4IsCHv7pZG2Whm7eJiB-fB710nM_87PzoDjWAEji4';
     
-    // 변수 중복을 방지하기 위해 _supabase 사용
     const _supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
     const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 15);
@@ -284,7 +302,7 @@
     let currentPostBase64Image = "";
 
     let savedPlaces = [];
-    let savedPosts = JSON.parse(localStorage.getItem('befree_posts')) || [];
+    let savedPosts = [];
     let customCategories = JSON.parse(localStorage.getItem('befree_categories')) || [];
     let mapMarkers = [];
 
@@ -672,7 +690,7 @@
       }
     }
 
-    function submitPost() {
+    async function submitPost() {
       const category = document.getElementById('postCategory').value;
       const author = document.getElementById('postAuthor').value.trim();
       const pw = document.getElementById('postPw').value.trim();
@@ -699,8 +717,8 @@
         date: new Date().toLocaleDateString()
       };
 
-      savedPosts.unshift(newPost);
-      localStorage.setItem('befree_posts', JSON.stringify(savedPosts));
+      const { error } = await _supabase.from('befree_posts').insert([newPost]);
+      if (error) { alert("게시글 저장 실패: " + error.message); return; }
 
       document.getElementById('postAuthor').value = "";
       document.getElementById('postPw').value = "";
@@ -709,12 +727,16 @@
       currentPostBase64Image = "";
       document.getElementById('postImageInput').value = "";
 
-      renderPosts();
+      await renderPosts();
       alert("📝 게시글이 작성되었습니다!");
       switchCommSubTab('list');
     }
 
-    function renderPosts() {
+    async function renderPosts() {
+      const { data, error } = await _supabase.from('befree_posts').select('*').order('id', { ascending: false });
+      if (error) { console.error("게시글 불러오기 실패:", error); return; }
+
+      savedPosts = data || [];
       const listEl = document.getElementById('communityList');
       listEl.innerHTML = "";
 
@@ -761,16 +783,18 @@
       });
     }
 
-    function likePost(id) {
+    async function likePost(id) {
       const post = savedPosts.find(p => p.id === id);
       if (post) {
-        post.likes = (post.likes || 0) + 1;
-        localStorage.setItem('befree_posts', JSON.stringify(savedPosts));
-        renderPosts();
+        const newLikes = (post.likes || 0) + 1;
+        const { error } = await _supabase.from('befree_posts').update({ likes: newLikes }).eq('id', id);
+        if (!error) {
+          await renderPosts();
+        }
       }
     }
 
-    function deletePost(id) {
+    async function deletePost(id) {
       const post = savedPosts.find(p => p.id === id);
       if (!post) return;
 
@@ -779,9 +803,10 @@
 
       if (inputPw === post.password || inputPw === ADMIN_PW) {
         if (confirm("이 게시글을 삭제하시겠습니까?")) {
-          savedPosts = savedPosts.filter(p => p.id !== id);
-          localStorage.setItem('befree_posts', JSON.stringify(savedPosts));
-          renderPosts();
+          const { error } = await _supabase.from('befree_posts').delete().eq('id', id);
+          if (error) { alert("삭제 실패: " + error.message); return; }
+
+          await renderPosts();
           alert("🗑️ 게시글이 삭제되었습니다.");
         }
       } else {
