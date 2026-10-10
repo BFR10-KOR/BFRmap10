@@ -7,6 +7,7 @@
   
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/NeoDunggeunmo.css">
 
   <style>
@@ -289,7 +290,9 @@
 
   <script>
     const ADMIN_PW = "0824"; // 마스터 관리자 비밀번호
-
+    const SUPABASE_URL = 'https://rshmbesowbnvevmipgxj.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_o7-yP6hu-6Clnp71CRgNkw_sC5PxPsv';
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
 
@@ -434,11 +437,57 @@
       }
     }
 
-    function submitReport() {
-      const author = document.getElementById('placeAuthor').value.trim();
-      const pw = document.getElementById('placePw').value.trim();
-      const title = document.getElementById('location').value.trim();
+   // 2. 새 장소 저장하기 (Create)
+async function submitReport() {
+  const author = document.getElementById('placeAuthor').value.trim();
+  const pw = document.getElementById('placePw').value.trim();
+  const title = document.getElementById('location').value.trim();
 
+  if (!author || !pw) { alert("닉네임과 비밀번호를 모두 입력해주세요!"); return; }
+  if (!title) { alert("장소명을 입력하시거나 지도를 클릭해 위치를 선택해주세요!"); return; }
+
+  if (!selectedLat) {
+    const center = map.getCenter();
+    selectedLat = center.lat;
+    selectedLng = center.lng;
+  }
+
+  const features = [];
+  document.querySelectorAll('#checkboxGroup input[type="checkbox"]:checked').forEach(cb => features.push(cb.value));
+  const rating = parseInt(document.getElementById('placeRating').value);
+  const description = document.getElementById('placeDescription').value.trim();
+
+  const newPlace = {
+    id: Date.now(),
+    author: author,
+    password: pw,
+    lat: selectedLat,
+    lng: selectedLng,
+    title: title,
+    description: description,
+    features: features,
+    rating: rating,
+    image: currentBase64Image
+  };
+
+  const { error } = await _supabase.from('befree_places').insert([newPlace]);
+  if (error) { alert("저장에 실패했습니다: " + error.message); return; }
+
+  if (selectedMarker) { map.removeLayer(selectedMarker); selectedMarker = null; }
+  selectedLat = null;
+  selectedLng = null;
+
+  document.getElementById('placeAuthor').value = "";
+  document.getElementById('placePw').value = "";
+  document.getElementById('location').value = "";
+  document.getElementById('placeDescription').value = "";
+  currentBase64Image = "";
+  document.getElementById('imageInput').value = "";
+
+  await renderSavedPlaces();
+  alert("🎉 장소가 성공적으로 등록되었습니다!");
+  switchTab('listTab', document.getElementById('btnTabList'));
+}
       if (!author || !pw) {
         alert("닉네임과 비밀번호를 모두 입력해주세요!");
         return;
@@ -503,39 +552,65 @@
       }
     }
 
-    function editPlace(id) {
-      const place = savedPlaces.find(p => p.id === id);
-      if (!place) return;
+// 3. 장소 수정하기 (Update)
+async function editPlace(id) {
+  const place = savedPlaces.find(p => p.id === id);
+  if (!place) return;
 
-      const inputPw = prompt("등록 시 설정한 비밀번호 또는 관리자 비밀번호를 입력하세요:");
-      if (inputPw === null) return;
+  const inputPw = prompt("등록 시 설정한 비밀번호 또는 관리자 비밀번호를 입력하세요:");
+  if (inputPw === null) return;
 
-      if (inputPw === place.password || inputPw === ADMIN_PW) {
-        const newTitle = prompt("수정할 장소명을 입력하세요:", place.title);
-        if (newTitle === null) return;
+  if (inputPw === place.password || inputPw === ADMIN_PW) {
+    const newTitle = prompt("수정할 장소명을 입력하세요:", place.title);
+    if (newTitle === null) return;
 
-        const newDesc = prompt("수정할 장소 설명을 입력하세요:", place.description || "");
-        if (newDesc === null) return;
+    const newDesc = prompt("수정할 장소 설명을 입력하세요:", place.description || "");
+    if (newDesc === null) return;
 
-        const newRating = prompt("수정할 별점(1~5 숫자 입력):", place.rating || 5);
-        if (newRating === null) return;
+    const newRating = prompt("수정할 별점(1~5 숫자 입력):", place.rating || 5);
+    if (newRating === null) return;
 
-        const currentFeaturesStr = place.features.join(', ');
-        const newFeaturesStr = prompt("수정할 편의시설 정보(쉼표로 구분):", currentFeaturesStr);
-        if (newFeaturesStr === null) return;
+    const currentFeaturesStr = (place.features || []).join(', ');
+    const newFeaturesStr = prompt("수정할 편의시설 정보(쉼표로 구분):", currentFeaturesStr);
+    if (newFeaturesStr === null) return;
 
-        place.title = newTitle.trim() || place.title;
-        place.description = newDesc.trim();
-        place.rating = Math.max(1, Math.min(5, parseInt(newRating) || 5));
-        place.features = newFeaturesStr.split(',').map(f => f.trim()).filter(f => f.length > 0);
+    const updatedData = {
+      title: newTitle.trim() || place.title,
+      description: newDesc.trim(),
+      rating: Math.max(1, Math.min(5, parseInt(newRating) || 5)),
+      features: newFeaturesStr.split(',').map(f => f.trim()).filter(f => f.length > 0)
+    };
 
-        localStorage.setItem('befree_places', JSON.stringify(savedPlaces));
-        renderSavedPlaces();
-        alert("✏️ 장소 정보가 수정되었습니다.");
-      } else {
-        alert("❌ 비밀번호가 일치하지 않습니다!");
-      }
+    const { error } = await _supabase.from('befree_places').update(updatedData).eq('id', id);
+    if (error) { alert("수정 실패: " + error.message); return; }
+
+    await renderSavedPlaces();
+    alert("✏️ 장소 정보가 수정되었습니다.");
+  } else {
+    alert("❌ 비밀번호가 일치하지 않습니다!");
+  }
+}
+
+// 4. 장소 삭제하기 (Delete)
+async function deletePlace(id) {
+  const place = savedPlaces.find(p => p.id === id);
+  if (!place) return;
+
+  const inputPw = prompt("등록 시 설정한 비밀번호 또는 관리자 비밀번호를 입력하세요:");
+  if (inputPw === null) return;
+
+  if (inputPw === place.password || inputPw === ADMIN_PW) {
+    if (confirm("이 장소를 목록에서 삭제하시겠습니까?")) {
+      const { error } = await _supabase.from('befree_places').delete().eq('id', id);
+      if (error) { alert("삭제 실패: " + error.message); return; }
+
+      await renderSavedPlaces();
+      alert("🗑️ 장소가 삭제되었습니다.");
     }
+  } else {
+    alert("❌ 비밀번호가 일치하지 않습니다!");
+  }
+}
 
     function deletePlace(id) {
       const place = savedPlaces.find(p => p.id === id);
@@ -556,17 +631,62 @@
       }
     }
 
-    function renderSavedPlaces() {
-      mapMarkers.forEach(m => map.removeLayer(m));
-      mapMarkers = [];
+   // 1. 저장된 장소 불러오기 (Read)
+async function renderSavedPlaces() {
+  mapMarkers.forEach(m => map.removeLayer(m));
+  mapMarkers = [];
 
-      const listEl = document.getElementById('placeList');
-      listEl.innerHTML = "";
+  const { data, error } = await _supabase.from('befree_places').select('*').order('created_at', { ascending: false });
+  if (error) { console.error("장소 불러오기 실패:", error); return; }
+  
+  savedPlaces = data || [];
+  const listEl = document.getElementById('placeList');
+  listEl.innerHTML = "";
 
-      if(savedPlaces.length === 0) {
-        listEl.innerHTML = '<li style="font-size:12px; color:#666; text-align:center; padding:15px;">등록된 장소가 없습니다.</li>';
-        return;
-      }
+  if (savedPlaces.length === 0) {
+    listEl.innerHTML = '<li style="font-size:12px; color:#666; text-align:center; padding:15px;">등록된 장소가 없습니다.</li>';
+    return;
+  }
+
+  savedPlaces.forEach((place, index) => {
+    const stars = getStarString(place.rating);
+    const marker = L.marker([place.lat, place.lng]).addTo(map);
+    
+    const authorText = place.author ? `등록자: ${place.author}` : '';
+    let popupContent = `<b>📍 ${place.title}</b><br><span style="color:#FFB300;">${stars}</span><br>${place.description ? '💬 ' + place.description + '<br>' : ''}${(place.features && place.features.join(', ')) || '정보 없음'}`;
+    if (authorText) popupContent += `<br><span style="font-size:11px; color:#666;">✍️ ${authorText}</span>`;
+    if (place.image) popupContent += `<br><img src="${place.image}" style="width:100%; max-height:80px; margin-top:4px; border-radius:4px;">`;
+    
+    marker.bindPopup(popupContent);
+    mapMarkers.push(marker);
+
+    const li = document.createElement('li');
+    li.className = 'place-item';
+    
+    const tagsHtml = (place.features || []).map(f => `<span class="tag">${f}</span>`).join('');
+    const imgTag = place.image ? `<img src="${place.image}" class="place-thumb">` : `<div class="place-thumb" style="display:flex;align-items:center;justify-content:center;font-size:18px;">📍</div>`;
+    const descHtml = place.description ? `<div style="font-size:11px; color:#555; margin-top:2px;">${place.description}</div>` : '';
+    const authorHtml = place.author ? `<div style="font-size:10px; color:#888; margin-top:2px;">✍️ ${place.author}</div>` : '';
+
+    li.innerHTML = `
+      ${imgTag}
+      <div class="place-info" onclick="focusPlaceOnMap(${index})">
+        <div style="font-size:12px; font-weight:bold; color:#1B4D3E;">${place.title}</div>
+        <div class="star-rating">${stars} (${place.rating || 5}점)</div>
+        ${descHtml}
+        ${authorHtml}
+        <div style="margin-top:2px;">${tagsHtml}</div>
+        <div><span class="btn-search-detail">🔍 지도에서 보기</span></div>
+      </div>
+      <div>
+        <button class="btn-action btn-edit" onclick="editPlace(${place.id})">수정</button>
+        <button class="btn-action btn-delete" onclick="deletePlace(${place.id})">삭제</button>
+      </div>
+    `;
+
+    listEl.appendChild(li);
+  });
+}
 
       savedPlaces.forEach((place, index) => {
         const stars = getStarString(place.rating);
