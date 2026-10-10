@@ -9,6 +9,9 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/NeoDunggeunmo.css">
 
+  <!-- ⚡ Supabase JavaScript Client Library 추가 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <style>
     :root {
       --bg-green: #1B4D3E;
@@ -111,7 +114,6 @@
     .tag { display: inline-block; background: #E0F2FE; border: 1px solid #000; padding: 1px 4px; border-radius: 3px; font-size: 10px; margin-right: 3px; }
     .star-rating { color: #FFB300; font-size: 12px; font-weight: bold; }
     
-    /* 🔍 돋보기 버튼 스타일 */
     .btn-search-detail {
       display: inline-flex; align-items: center; gap: 3px; margin-top: 4px;
       padding: 3px 6px; background: #E8F5E9; border: 2px solid #1B4D3E;
@@ -179,7 +181,6 @@
 
   <!-- 🔻 접기/펼치기 하단 패널 감싸기 -->
   <div id="collapsiblePanel" class="collapsible-panel">
-    <!-- 화살표 접기/펼치기 토글 버튼 -->
     <div class="toggle-bar">
       <button id="toggleBtn" class="toggle-btn" onclick="toggleBottomPanel()">▼ 접기</button>
     </div>
@@ -283,6 +284,11 @@
   </div>
 
   <script>
+    // ⚡ SUPABASE 설정 (본인의 URL과 ANON KEY로 대체하세요)
+    const SUPABASE_URL = "https://rshmbesowbnvevmipgxj.supabase.co/rest/v1/"; 
+    const SUPABASE_ANON_KEY = "sb_publishable_o7-yP6hu-6Clnp71CRgNkw_sC5PxPsv";
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
     const ADMIN_PW = "0824";
     const map = L.map('map', { zoomControl: false }).setView([37.5665, 126.9780], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
@@ -294,15 +300,15 @@
     let currentBase64Image = "";
     let currentPostBase64Image = "";
 
-    let savedPlaces = JSON.parse(localStorage.getItem('befree_places')) || [];
-    let savedPosts = JSON.parse(localStorage.getItem('befree_posts')) || [];
-    let customCategories = JSON.parse(localStorage.getItem('befree_categories')) || [];
+    let savedPlaces = [];
+    let savedPosts = [];
+    let customCategories = [];
     let mapMarkers = [];
 
-    window.onload = function() {
-      loadCategories();
-      renderSavedPlaces();
-      renderPosts();
+    window.onload = async function() {
+      await loadCategories();
+      await renderSavedPlaces();
+      await renderPosts();
     };
 
     function toggleBottomPanel() {
@@ -410,12 +416,22 @@
       }
     }
 
-    function renderSavedPlaces() {
+    /* ⚡ DB 장소 데이터 불러오기 및 렌더링 */
+    async function renderSavedPlaces() {
       mapMarkers.forEach(m => map.removeLayer(m));
       mapMarkers = [];
 
       const listEl = document.getElementById('placeList');
       listEl.innerHTML = "";
+
+      const { data, error } = await supabase.from('befree_places').select('*').order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error("장소 불러오기 실패:", error);
+        return;
+      }
+
+      savedPlaces = data || [];
 
       if (savedPlaces.length === 0) {
         listEl.innerHTML = '<li style="font-size:12px; color:#666; text-align:center; padding:15px;">등록된 장소가 없습니다.</li>';
@@ -462,7 +478,8 @@
       });
     }
 
-    function submitReport() {
+    /* ⚡ DB 장소 등록 */
+    async function submitReport() {
       const author = document.getElementById('placeAuthor').value.trim();
       const pw = document.getElementById('placePw').value.trim();
       const title = document.getElementById('location').value.trim();
@@ -481,21 +498,25 @@
       const rating = parseInt(document.getElementById('placeRating').value);
       const description = document.getElementById('placeDescription').value.trim();
 
-      const newPlace = {
-        id: Date.now(),
-        author: author,
-        password: pw,
-        lat: selectedLat,
-        lng: selectedLng,
-        title: title,
-        description: description,
-        features: features,
-        rating: rating,
-        image: currentBase64Image
-      };
+      const { error } = await supabase.from('befree_places').insert([
+        {
+          author: author,
+          password: pw,
+          lat: selectedLat,
+          lng: selectedLng,
+          title: title,
+          description: description,
+          features: features,
+          rating: rating,
+          image: currentBase64Image
+        }
+      ]);
 
-      savedPlaces.push(newPlace);
-      localStorage.setItem('befree_places', JSON.stringify(savedPlaces));
+      if (error) {
+        alert("장소 등록에 실패했습니다.");
+        console.error(error);
+        return;
+      }
 
       if (selectedMarker) { map.removeLayer(selectedMarker); selectedMarker = null; }
       selectedLat = null;
@@ -508,12 +529,13 @@
       currentBase64Image = "";
       document.getElementById('imageInput').value = "";
 
-      renderSavedPlaces();
+      await renderSavedPlaces();
       alert("🎉 장소가 성공적으로 등록되었습니다!");
       switchTab('listTab', document.getElementById('btnTabList'));
     }
 
-    function editPlace(id) {
+    /* ⚡ DB 장소 수정 */
+    async function editPlace(id) {
       const place = savedPlaces.find(p => p.id === id);
       if (!place) return;
 
@@ -534,20 +556,32 @@
         const newFeaturesStr = prompt("수정할 편의시설 정보(쉼표로 구분):", currentFeaturesStr);
         if (newFeaturesStr === null) return;
 
-        place.title = newTitle.trim() || place.title;
-        place.description = newDesc.trim();
-        place.rating = Math.max(1, Math.min(5, parseInt(newRating) || 5));
-        place.features = newFeaturesStr.split(',').map(f => f.trim()).filter(f => f.length > 0);
+        const updatedTitle = newTitle.trim() || place.title;
+        const updatedDesc = newDesc.trim();
+        const updatedRating = Math.max(1, Math.min(5, parseInt(newRating) || 5));
+        const updatedFeatures = newFeaturesStr.split(',').map(f => f.trim()).filter(f => f.length > 0);
 
-        localStorage.setItem('befree_places', JSON.stringify(savedPlaces));
-        renderSavedPlaces();
+        const { error } = await supabase.from('befree_places').update({
+          title: updatedTitle,
+          description: updatedDesc,
+          rating: updatedRating,
+          features: updatedFeatures
+        }).eq('id', id);
+
+        if (error) {
+          alert("수정에 실패했습니다.");
+          return;
+        }
+
+        await renderSavedPlaces();
         alert("✏️ 장소 정보가 수정되었습니다.");
       } else {
         alert("❌ 비밀번호가 일치하지 않습니다!");
       }
     }
 
-    function deletePlace(id) {
+    /* ⚡ DB 장소 삭제 */
+    async function deletePlace(id) {
       const place = savedPlaces.find(p => p.id === id);
       if (!place) return;
 
@@ -556,9 +590,12 @@
 
       if (inputPw === place.password || inputPw === ADMIN_PW) {
         if (confirm("이 장소를 목록에서 삭제하시겠습니까?")) {
-          savedPlaces = savedPlaces.filter(p => p.id !== id);
-          localStorage.setItem('befree_places', JSON.stringify(savedPlaces));
-          renderSavedPlaces();
+          const { error } = await supabase.from('befree_places').delete().eq('id', id);
+          if (error) {
+            alert("삭제에 실패했습니다.");
+            return;
+          }
+          await renderSavedPlaces();
           alert("🗑️ 장소가 삭제되었습니다.");
         }
       } else {
@@ -576,13 +613,17 @@
       }
     }
 
-    /* --- 💬 커뮤니티 기능 --- */
-    function loadCategories() {
+    /* --- 💬 커뮤니티 기능 (⚡ Supabase 연동) --- */
+    async function loadCategories() {
       const select = document.getElementById('postCategory');
       select.innerHTML = `
         <option value="자유">💬 자유</option>
         <option value="공지">📢 공지</option>
       `;
+
+      const { data } = await supabase.from('befree_categories').select('name');
+      customCategories = (data || []).map(c => c.name);
+
       customCategories.forEach(cat => {
         const opt = document.createElement('option');
         opt.value = cat;
@@ -598,21 +639,22 @@
       return false;
     }
 
-    function addCategoryByAdmin() {
+    async function addCategoryByAdmin() {
       if (!checkAdminAuth()) return;
       const newCat = prompt("추가할 신규 카테고리 이름을 입력하세요:");
       if (newCat && newCat.trim()) {
         const catName = newCat.trim();
-        if (!customCategories.includes(catName)) {
-          customCategories.push(catName);
-          localStorage.setItem('befree_categories', JSON.stringify(customCategories));
-          loadCategories();
+        const { error } = await supabase.from('befree_categories').insert([{ name: catName }]);
+        if (!error) {
+          await loadCategories();
           alert(`✅ '${catName}' 카테고리가 추가되었습니다.`);
+        } else {
+          alert("이미 존재하는 카테고리이거나 등록 오류입니다.");
         }
       }
     }
 
-    function editCategoryByAdmin() {
+    async function editCategoryByAdmin() {
       if (!checkAdminAuth()) return;
       const select = document.getElementById('postCategory');
       const currentCat = select.value;
@@ -622,17 +664,15 @@
       }
       const newName = prompt(`'${currentCat}' 카테고리의 새 이름을 입력하세요:`, currentCat);
       if (newName && newName.trim()) {
-        const idx = customCategories.indexOf(currentCat);
-        if (idx !== -1) {
-          customCategories[idx] = newName.trim();
-          localStorage.setItem('befree_categories', JSON.stringify(customCategories));
-          loadCategories();
+        const { error } = await supabase.from('befree_categories').update({ name: newName.trim() }).eq('name', currentCat);
+        if (!error) {
+          await loadCategories();
           alert("✏️ 카테고리 이름이 수정되었습니다.");
         }
       }
     }
 
-    function deleteCategoryByAdmin() {
+    async function deleteCategoryByAdmin() {
       if (!checkAdminAuth()) return;
       const select = document.getElementById('postCategory');
       const currentCat = select.value;
@@ -641,10 +681,11 @@
         return;
       }
       if (confirm(`정말로 '${currentCat}' 카테고리를 삭제하시겠습니까?`)) {
-        customCategories = customCategories.filter(c => c !== currentCat);
-        localStorage.setItem('befree_categories', JSON.stringify(customCategories));
-        loadCategories();
-        alert("🗑️ 카테고리가 삭제되었습니다.");
+        const { error } = await supabase.from('befree_categories').delete().eq('name', currentCat);
+        if (!error) {
+          await loadCategories();
+          alert("🗑️ 카테고리가 삭제되었습니다.");
+        }
       }
     }
 
@@ -675,7 +716,8 @@
       }
     }
 
-    function submitPost() {
+    /* ⚡ DB 게시글 등록 */
+    async function submitPost() {
       const category = document.getElementById('postCategory').value;
       const author = document.getElementById('postAuthor').value.trim();
       const pw = document.getElementById('postPw').value.trim();
@@ -690,20 +732,23 @@
         return;
       }
 
-      const newPost = {
-        id: Date.now(),
-        category: category,
-        author: author,
-        password: pw,
-        title: title,
-        content: content,
-        image: currentPostBase64Image,
-        likes: 0,
-        date: new Date().toLocaleDateString()
-      };
+      const { error } = await supabase.from('befree_posts').insert([
+        {
+          category: category,
+          author: author,
+          password: pw,
+          title: title,
+          content: content,
+          image: currentPostBase64Image,
+          likes: 0,
+          date: new Date().toLocaleDateString()
+        }
+      ]);
 
-      savedPosts.unshift(newPost);
-      localStorage.setItem('befree_posts', JSON.stringify(savedPosts));
+      if (error) {
+        alert("게시글 등록에 실패했습니다.");
+        return;
+      }
 
       document.getElementById('postAuthor').value = "";
       document.getElementById('postPw').value = "";
@@ -712,14 +757,24 @@
       currentPostBase64Image = "";
       document.getElementById('postImageInput').value = "";
 
-      renderPosts();
+      await renderPosts();
       alert("📝 게시글이 작성되었습니다!");
       switchCommSubTab('list');
     }
 
-    function renderPosts() {
+    /* ⚡ DB 게시글 목록 불러오기 및 렌더링 */
+    async function renderPosts() {
       const listEl = document.getElementById('communityList');
       listEl.innerHTML = "";
+
+      const { data, error } = await supabase.from('befree_posts').select('*').order('created_at', { ascending: false });
+
+      if (error) {
+        console.error("게시글 불러오기 실패:", error);
+        return;
+      }
+
+      savedPosts = data || [];
 
       if (savedPosts.length === 0) {
         listEl.innerHTML = '<div style="font-size:12px; color:#666; text-align:center; padding:15px;">등록된 게시글이 없습니다.</div>';
@@ -750,11 +805,12 @@
             <span style="font-size:11px; color:#666;">✍️ ${post.author} (${post.date})</span>
           </div>
           <div style="font-size:13px; font-weight:bold; margin-bottom:4px; color:#1A3026;">${post.title}</div>
-          <div style="font-size:12px; color:#444; white-space:pre-wrap;">${post.content}</div>
+          <div style="font-size:12px; color:#333; line-height:1.4; white-space:pre-wrap;">${post.content}</div>
           ${imgHtml}
           <div class="post-footer">
             <button class="btn-like" onclick="likePost(${post.id})">❤️ 좋아요 ${post.likes || 0}</button>
             <div>
+              <button class="btn-action btn-edit" onclick="editPost(${post.id})">수정</button>
               <button class="btn-action btn-delete" onclick="deletePost(${post.id})">삭제</button>
             </div>
           </div>
@@ -764,28 +820,61 @@
       });
     }
 
-    function likePost(id) {
+    /* ⚡ DB 게시글 좋아요 증가 */
+    async function likePost(id) {
       const post = savedPosts.find(p => p.id === id);
       if (post) {
-        post.likes = (post.likes || 0) + 1;
-        localStorage.setItem('befree_posts', JSON.stringify(savedPosts));
-        renderPosts();
+        const updatedLikes = (post.likes || 0) + 1;
+        const { error } = await supabase.from('befree_posts').update({ likes: updatedLikes }).eq('id', id);
+        if (!error) {
+          await renderPosts();
+        }
       }
     }
 
-    function deletePost(id) {
+    /* ⚡ DB 게시글 수정 */
+    async function editPost(id) {
       const post = savedPosts.find(p => p.id === id);
       if (!post) return;
 
-      const inputPw = prompt("글 작성 시 설정한 비밀번호 또는 관리자 비밀번호를 입력하세요:");
+      const inputPw = prompt("게시글 비밀번호 또는 관리자 비밀번호를 입력하세요:");
+      if (inputPw === null) return;
+
+      if (inputPw === post.password || inputPw === ADMIN_PW) {
+        const newTitle = prompt("수정할 제목을 입력하세요:", post.title);
+        if (newTitle === null) return;
+
+        const newContent = prompt("수정할 내용을 입력하세요:", post.content);
+        if (newContent === null) return;
+
+        const updatedTitle = newTitle.trim() || post.title;
+        const updatedContent = newContent.trim() || post.content;
+
+        const { error } = await supabase.from('befree_posts').update({ title: updatedTitle, content: updatedContent }).eq('id', id);
+        if (!error) {
+          await renderPosts();
+          alert("✏️ 게시글이 수정되었습니다.");
+        }
+      } else {
+        alert("❌ 비밀번호가 일치하지 않습니다!");
+      }
+    }
+
+    /* ⚡ DB 게시글 삭제 */
+    async function deletePost(id) {
+      const post = savedPosts.find(p => p.id === id);
+      if (!post) return;
+
+      const inputPw = prompt("게시글 비밀번호 또는 관리자 비밀번호를 입력하세요:");
       if (inputPw === null) return;
 
       if (inputPw === post.password || inputPw === ADMIN_PW) {
         if (confirm("이 게시글을 삭제하시겠습니까?")) {
-          savedPosts = savedPosts.filter(p => p.id !== id);
-          localStorage.setItem('befree_posts', JSON.stringify(savedPosts));
-          renderPosts();
-          alert("🗑️ 게시글이 삭제되었습니다.");
+          const { error } = await supabase.from('befree_posts').delete().eq('id', id);
+          if (!error) {
+            await renderPosts();
+            alert("🗑️ 게시글이 삭제되었습니다.");
+          }
         }
       } else {
         alert("❌ 비밀번호가 일치하지 않습니다!");
